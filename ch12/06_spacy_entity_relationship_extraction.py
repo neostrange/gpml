@@ -1,9 +1,10 @@
 import spacy
 import sys
-import neuralcoref
+#import neuralcoref
+import coreferee
 
-from ch12.text_processors import TextProcessor
-from util.graphdb_base import GraphDBBase
+from gpml.ch12.text_processors import TextProcessor
+from gpml.util.graphdb_base import GraphDBBase
 
 
 class GraphBasedNLP(GraphDBBase):
@@ -11,9 +12,11 @@ class GraphBasedNLP(GraphDBBase):
     def __init__(self, argv):
         super().__init__(command=__file__, argv=argv)
         spacy.prefer_gpu()
-        self.nlp = spacy.load('en_core_web_sm')
-        coref = neuralcoref.NeuralCoref(self.nlp.vocab)
-        self.nlp.add_pipe(coref, name='neuralcoref')
+        self.nlp = spacy.load('en_core_web_trf')
+        #coref = neuralcoref.NeuralCoref(self.nlp.vocab)
+        #self.nlp.add_pipe(coref, name='neuralcoref')
+        self.nlp.add_pipe('coreferee')
+
         self.__text_processor = TextProcessor(self.nlp, self._driver)
         self.create_constraints()
 
@@ -50,8 +53,7 @@ class GraphBasedNLP(GraphDBBase):
 if __name__ == '__main__':
     basic_nlp = GraphBasedNLP(sys.argv[1:])
     basic_nlp.tokenize_and_store(
-        "Marie Curie received the Nobel Prize in Physics in 1903. "
-        "She became the first woman to win the prize and the first person — man or woman — to win the award twice.",
+        "Understand that words are units of meaning and can be made of more than one meaningful part.",
         3,
         False)
 

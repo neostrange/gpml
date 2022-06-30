@@ -1,7 +1,7 @@
-spacy==2.3.2
+spacy==3.3.1
 neo4j>=4.0,<4.3
 pytextrank
 cython
 pandas
 #neuralcoref
-git+https://github.com/huggingface/neuralcoref.git
+#git+https://github.com/huggingface/neuralcoref.git

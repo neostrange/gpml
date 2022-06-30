@@ -111,7 +111,8 @@ class TextProcessor(object):
         """
         self.execute_query(ne_query, {"documentId": document_id, "nes": nes})
 
-    def process_coreference(self, doc, text_id):
+
+    def process_coreference2(self, doc, text_id):
         coref = []
         if doc._.has_coref:
             for cluster in doc._.coref_clusters:
@@ -120,14 +121,26 @@ class TextProcessor(object):
             self.store_coref(text_id, coref)
         return coref
 
+    def process_coreference(self,doc,text_id):
+        coref = []
+
+        if len(doc._.coref_chains) > 0:
+            for chain in doc._.coref_chains:
+                for x in range(len(chain)-1):
+                    mention = {'from_index': doc[chain[x+1].token_indexes[0]].idx, 'to_index': doc[chain[0].token_indexes[0]].idx}
+                    coref.append(mention)
+            self.store_coref(text_id,coref)
+        return coref
+
+
     def store_coref(self, document_id, corefs):
         coref_query = """
                 MATCH (document:AnnotatedText)
                 WHERE document.id = $documentId 
                 WITH document
                 UNWIND $corefs as coref  
-                MATCH (document)-[*3..3]->(start:NamedEntity), (document)-[*3..3]->(end:NamedEntity) 
-                WHERE start.index = coref.from_index AND end.index = coref.to_index
+                MATCH (document)-[*2]->(start:TagOccurrence), (document)-[*2]->(np:TagOccurrence)-[:PARTICIPATES_IN]->(end:NamedEntity) 
+                WHERE start.index = coref.from_index AND np.index = coref.to_index
                 MERGE (start)-[:MENTIONS]->(end)
         """
         self.execute_query(coref_query,
