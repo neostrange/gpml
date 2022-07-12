@@ -1,8 +1,123 @@
 import spacy
 from spacy.lang.en.stop_words import STOP_WORDS
+import json
+from tokenize import String
+#from allennlp.predictors.predictor import Predictor
+#from allennlp_models import pretrained
+#import allennlp_models.tagging
+from spacy import Language
+import GPUtil
+import spacy
+from spacy.matcher import Matcher, DependencyMatcher
+from spacy.tokens import Doc, Token, Span
+from spacy.language import Language
+import textwrap
+from gpml.util.RestCaller import callAllenNlpApi
+from transformers import logging
+logging.set_verbosity_error()
+
+from py2neo import Graph
+from py2neo import *
+
+
 
 
 class TextProcessor(object):
+    
+    def apply_pipeline_1(self, doc, flag_display = False):
+
+        graph = Graph("bolt://10.1.48.224:7687", auth=("neo4j", "neo123"))
+        #doc = nlp(ss)
+
+        list_pipeline = []
+
+        for tok in doc:
+            list_pipeline.append((tok.i, tok.text, tok.tag_, tok.pos_, tok.dep_, 
+                                '\n'.join(textwrap.wrap(json.dumps(tok._.SRL), width = 60))
+                                ))
+
+        #a = Node("Frame", text="verb", span="", startIndex="", endIndex="")
+        #b = Node("FrameArgument", type="", text="Bob", span="", startIndex="", endIndex="")
+        
+        frameDict ={}
+
+        v = ""
+        sg = ""
+        tv = ""
+        ta = ""
+
+        PARTICIPANT = Relationship.type("PARTICIPANT")
+        PARTICIPATES_IN = Relationship.type("PARTICIPATES_IN")
+
+        for tok in doc:
+            sg=""
+            v="" 
+            frameDict={} 
+            for x,y in tok._.SRL.items():
+                span = doc[y[0]:y[len(y)-1]+1]
+
+
+                # now got the span, iterate through span for each token
+                # locate that token in neo4j as the TagOccurrence by id
+                # make connection with the frame or frameargument node.
+
+
+                if x == "V":
+                    # see if the token refers to verb (predicate)
+                    v = Node("Frame", text=span.text, startIndex=y[0], endIndex=y[len(y)-1])
+
+                    for index in y:
+                        query = "match (x:TagOccurrence {tok_index_doc:" + str(index) + "}) return x"
+                        token_node= graph.evaluate(query) 
+                        token_verb_rel = PARTICIPATES_IN(token_node,v)
+
+                    #frameDict[x] = v;
+                    # save the verb node seperately 
+                    #sg=v
+                    #sg = token_span_rel 
+                    tv = token_verb_rel
+                else:
+                    # find all the respective argument nodes and save it to dictionary
+                    a = Node("FrameArgument", type= x, text=span.text, startIndex=y[0], endIndex=y[len(y)-1])
+                    
+                    for index in y:
+                        query = "match (x:TagOccurrence {tok_index_doc:" + str(index) + "}) return x"
+                        token_node= graph.evaluate(query) 
+                        token_arg_rel = PARTICIPATES_IN(token_node,a)
+
+                        if ta == "":
+                            ta = token_arg_rel
+                        else:
+                            ta = ta | token_arg_rel
+
+
+
+
+                    frameDict[x] = a;
+            
+            if tv == "":
+                continue
+            else:
+                sg = tv | ta
+
+                for i in frameDict:
+                    if not sg:
+                        break;
+                    r = PARTICIPANT(frameDict[i],v)
+                    sg = sg | r
+
+
+                graph.create(sg)
+
+            #print(x, ": ",y, span.text)
+                        
+
+        print("list pipeline: ", list_pipeline)
+        print("------------------------------------------------")
+        print(tok._.SRL)
+
+    
+
     def __init__(self, nlp, driver):
         self.nlp = nlp
         self._driver = driver
@@ -68,13 +183,17 @@ class TextProcessor(object):
         tag_occurrence_dependencies = []
         for token in sentence:
             lexeme = self.nlp.vocab[token.text]
-            if not lexeme.is_punct and not lexeme.is_space:
+            # edited: included the punctuation as possible token candidates.
+            #if not lexeme.is_punct and not lexeme.is_space:
+            if not lexeme.is_space:
                 tag_occurrence_id = str(text_id) + "_" + str(sentence_id) + "_" + str(token.idx)
                 tag_occurrence = {"id": tag_occurrence_id,
                                   "index": token.idx,
                                   "text": token.text,
                                   "lemma": token.lemma_,
                                   "pos": token.tag_,
+                                  "tok_index_doc": token.i,
+                                  "tok_index_sent": (token.i - sentence.start),
                                   "is_stop": (lexeme.is_stop or lexeme.is_punct or lexeme.is_space)}
                 tag_occurrences.append(tag_occurrence)
                 tag_occurrence_dependency_source = str(text_id) + "_" + str(sentence_id) + "_" + str(token.head.idx)
@@ -146,6 +265,9 @@ class TextProcessor(object):
         self.execute_query(coref_query,
                            {"documentId": document_id, "corefs": corefs})
 
+    
+    
+    
     def process_textrank(self, doc, text_id):
         keywords = []
         spans = []
@@ -290,3 +412,4 @@ def filter_extended_spans(items):
         seen_tokens.update(range(item['span'].start, item['span'].end))
     result = sorted(result, key=lambda span: span['span'].start)
     return result
+
