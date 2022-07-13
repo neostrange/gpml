@@ -45,12 +45,14 @@ class GraphBasedNLP(GraphDBBase):
         self.execute_without_exception("CREATE CONSTRAINT ON (l:Entity) ASSERT (l.type, l.id) IS NODE KEY")
         self.execute_without_exception("CREATE CONSTRAINT ON (l:Evidence) ASSERT (l.id) IS NODE KEY")
         self.execute_without_exception("CREATE CONSTRAINT ON (l:Relationship) ASSERT (l.id) IS NODE KEY")
+        self.execute_without_exception("CREATE CONSTRAINT ON (l:NounChunk) ASSERT (l.id) IS NODE KEY")
 
     def tokenize_and_store(self, text, text_id, storeTag):
         docs = self.nlp.pipe([text])
         for doc in docs:
             annotated_text = self.__text_processor.create_annotated_text(doc, text_id)
             spans = self.__text_processor.process_sentences(annotated_text, doc, storeTag, text_id)
+            noun_chunks = self.__text_processor.process_noun_chunks(doc, text_id),
             nes = self.__text_processor.process_entities(spans, text_id)
             coref = self.__text_processor.process_coreference(doc, text_id)
             self.__text_processor.build_entities_inferred_graph(text_id)

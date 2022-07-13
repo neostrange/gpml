@@ -90,9 +90,6 @@ class TextProcessor(object):
                         else:
                             ta = ta | token_arg_rel
 
-
-
-
                     frameDict[x] = a;
             
             if tv == "":
@@ -134,7 +131,8 @@ class TextProcessor(object):
         i = 1
         for sentence in doc.sents:
             sentence_id = self.store_sentence(sentence, annotated_text, text_id, i, storeTag)
-            spans = list(doc.ents) + list(doc.noun_chunks)
+            #spans = list(doc.ents) + list(doc.noun_chunks) - just removed so that only entities get stored.
+            spans = list(doc.ents)
             spans = filter_spans(spans)
             i += 1
         return spans
@@ -217,6 +215,27 @@ class TextProcessor(object):
             nes.append(ne)
         self.store_entities(text_id, nes)
         return nes
+
+    def process_noun_chunks(self, doc, text_id):
+        ncs = []
+        for noun_chunk in doc.noun_chunks:
+            nc = {'value': noun_chunk.text, 'type': noun_chunk.label_, 'start_index': noun_chunk.start_char,
+                  'end_index': noun_chunk.end_char}
+            ncs.append(nc)
+        self.store_noun_chunks(text_id, ncs)
+        return ncs
+
+    def store_noun_chunks(self, document_id, ncs):
+        nc_query = """
+            UNWIND $ncs as item
+            MERGE (nc:NounChunk {id: toString($documentId) + "_" + toString(item.start_index)})
+            SET nc.type = item.type, nc.value = item.value, nc.index = item.start_index
+            WITH nc, item as ncIndex
+            MATCH (text:AnnotatedText)-[:CONTAINS_SENTENCE]->(sentence:Sentence)-[:HAS_TOKEN]->(tagOccurrence:TagOccurrence)
+            WHERE text.id = $documentId AND tagOccurrence.index >= ncIndex.start_index AND tagOccurrence.index < ncIndex.end_index
+            MERGE (nc)<-[:PARTICIPATES_IN]-(tagOccurrence)
+        """
+        self.execute_query(nc_query, {"documentId": document_id, "ncs": ncs})
 
     def store_entities(self, document_id, nes):
         ne_query = """
