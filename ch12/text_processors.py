@@ -119,9 +119,23 @@ class TextProcessor(object):
         self.nlp = nlp
         self._driver = driver
 
+ # query = """MERGE (ann:AnnotatedText {id: $id})
+       #     RETURN id(ann) as result
+        #"""
+
+        
     def create_annotated_text(self, doc, id):
-        query = """MERGE (ann:AnnotatedText {id: $id})
-            RETURN id(ann) as result
+      
+
+
+        query = """ CALL apoc.load.xml("file://Apple_releases_Macbook.naf") 
+        YIELD value
+        UNWIND [item in value._children where item._type ="nafHeader"] AS nafHeader
+        UNWIND [item in value._children where item._type ="raw"] AS raw
+        UNWIND [item in nafHeader._children where item._type = "fileDesc"] AS fileDesc
+        UNWIND [item in nafHeader._children where item._type = "public"] AS public
+        WITH  fileDesc.author as author, fileDesc.creationtime as creationtime, fileDesc.filename as filename, fileDesc.filetype as filetype, fileDesc.title as title, public.publicId as publicId, public.uri as uri, raw._text as text
+        MERGE (at:AnnotatedText {id: $id}) set at.author = author
         """
         params = {"id": id}
         results = self.execute_query(query, params)

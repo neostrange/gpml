@@ -11,8 +11,6 @@ from gpml.util.graphdb_base import GraphDBBase
 
 
 
-
-
 class GraphBasedNLP(GraphDBBase):
 
     def __init__(self, argv):
